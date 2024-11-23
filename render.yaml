@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: bc-debt-simulation
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run debt_pp.py
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9

@@ -250,25 +250,25 @@ def analyze_simulations(simulations: List[Dict], scenario_name: str) -> None:
         print(df.to_string(index=False))
 
 # Run simulations
-simulator = BCDebtSimulation()
+# simulator = BCDebtSimulation()
 
-# Scenario parameters
-params = {
-    'initial_debt': 900000,
-    'savings': 500000,
-    'interest_rate': 0.055,
-    'min_return': 0.1,
-    'max_return': 0.3,
-    'monthly_income_needed': 3000,
-    'num_simulations': 10000
-}
+# # Scenario parameters
+# params = {
+#     'initial_debt': 900000,
+#     'savings': 500000,
+#     'interest_rate': 0.055,
+#     'min_return': 0.1,
+#     'max_return': 0.3,
+#     'monthly_income_needed': 3000,
+#     'num_simulations': 10000
+# }
 
-# Scenario 1: All money in TFSA
-scenario1_results = simulator.run_simulation(tfsa_amount=500000, **params)
+# # Scenario 1: All money in TFSA
+# scenario1_results = simulator.run_simulation(tfsa_amount=500000, **params)
 
-# Scenario 2: Only $300,000 in TFSA
-scenario2_results = simulator.run_simulation(tfsa_amount=300000, **params)
+# # Scenario 2: Only $300,000 in TFSA
+# scenario2_results = simulator.run_simulation(tfsa_amount=300000, **params)
 
-# Analyze results
-analyze_simulations(scenario1_results, "Scenario 1 (Full TFSA)")
-analyze_simulations(scenario2_results, "Scenario 2 ($300,000 in TFSA)")
+# # Analyze results
+# analyze_simulations(scenario1_results, "Scenario 1 (Full TFSA)")
+# analyze_simulations(scenario2_results, "Scenario 2 ($300,000 in TFSA)")

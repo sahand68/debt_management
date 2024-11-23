@@ -46,8 +46,10 @@ def main():
     # Add annual TFSA contribution input
     annual_tfsa_contribution = st.sidebar.number_input("Annual TFSA Contribution ($)", min_value=0.0, value=6500.0, step=500.0)
 
-    run_sim = st.sidebar.button("Run Simulation")
+    # Move the run simulation button to the main area
+    run_sim = st.button("Run Simulation")
 
+    # Wrap the simulation logic in the run_sim condition
     if run_sim:
         st.write("Running simulations...")
         simulator = BCDebtSimulation()
@@ -118,6 +120,8 @@ def main():
 
         else:
             st.write("No successful simulations.")
+    else:
+        st.write("Please adjust the parameters and click 'Run Simulation' to start the calculation.")
 
 if __name__ == "__main__":
     main()

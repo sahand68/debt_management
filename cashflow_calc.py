@@ -68,9 +68,9 @@ class BCDebtSimulation:
             
         return total_tax
 
-    def calculate_gross_income(self, net_income_needed, income_type='regular'):
-        """Calculate the gross income required to achieve the net income after taxes."""
-        gross_income = net_income_needed / 0.8  # Initial guess
+    def calculate_gross_income(self, net_income_needed: float, income_type: str = 'regular') -> float:
+        """Calculate gross income needed to achieve desired net income after taxes"""
+        gross_income = net_income_needed / 0.7  # Initial guess
         for _ in range(10):  # Iterative approach
             tax = self.calculate_tax(gross_income, income_type)
             net_income = gross_income - tax
@@ -80,13 +80,27 @@ class BCDebtSimulation:
             gross_income += difference
         return gross_income
 
-    def calculate_mortgage_payment(self, principal, annual_rate, years):
+    def calculate_mortgage_payment(self, principal: float, annual_rate: float, years: int) -> float:
         """Calculate monthly mortgage payment"""
+        if principal <= 0 or years <= 0:
+            return 0.0
+        
         monthly_rate = annual_rate / 12
         num_payments = years * 12
+        
         if monthly_rate == 0:
             return principal / num_payments
+            
         return principal * (monthly_rate * (1 + monthly_rate)**num_payments) / ((1 + monthly_rate)**num_payments - 1)
+
+    def calculate_mortgage_principal_payment(self, principal: float, payment: float, annual_rate: float) -> float:
+        """Calculate the principal portion of a mortgage payment"""
+        if principal <= 0 or payment <= 0:
+            return 0.0
+            
+        monthly_rate = annual_rate / 12
+        interest_payment = principal * monthly_rate
+        return payment - interest_payment
 
     def run_simulation(self, 
                       initial_debt: float,
@@ -102,92 +116,124 @@ class BCDebtSimulation:
                       dividend_yield: float = 0.02,
                       debt_type: str = "Line of Credit",
                       amortization_years: int = 25,
-                      annual_tfsa_contribution: float = 6500.0) -> Dict:
+                      annual_tfsa_contribution: float = 6500.0) -> List[Dict]:
+        """
+        Run debt repayment simulations with investment returns
+        
+        Parameters:
+        initial_debt (float): Starting debt amount
+        savings (float): Total initial savings
+        tfsa_amount (float): Amount of savings allocated to TFSA
+        interest_rate (float): Annual interest rate on debt
+        min_return (float): Minimum annual investment return
+        max_return (float): Maximum annual investment return
+        monthly_income_needed (float): Required monthly after-tax income
+        num_simulations (int): Number of simulation runs
+        max_years (int): Maximum simulation years
+        inflation_rate (float): Annual inflation rate
+        dividend_yield (float): Annual dividend yield
+        debt_type (str): "Line of Credit" or "Mortgage"
+        amortization_years (int): Years for mortgage amortization
+        annual_tfsa_contribution (float): Yearly TFSA contribution
+        
+        Returns:
+        List[Dict]: Results of all simulations
+        """
         
         all_simulations = []
 
         for sim in range(num_simulations):
             # Initialize simulation variables
             current_debt = initial_debt
-            tfsa_savings = min(tfsa_amount, savings)  # Prioritize TFSA
+            tfsa_savings = min(tfsa_amount, savings)
             taxable_savings = max(0, savings - tfsa_amount)
-            taxable_cost_basis = taxable_savings  # Initial cost basis equals initial investment
+            taxable_cost_basis = taxable_savings
             years = 0
             total_tax_paid = 0
             yearly_income_needed = monthly_income_needed * 12
             annual_data = []
+
+            # Calculate fixed monthly mortgage payment if applicable
+            monthly_mortgage_payment = 0
+            if debt_type == "Mortgage":
+                monthly_mortgage_payment = self.calculate_mortgage_payment(
+                    initial_debt, interest_rate, amortization_years)
 
             while current_debt > 0 and years < max_years:
                 # Adjust for inflation
                 if years > 0:
                     yearly_income_needed *= (1 + inflation_rate)
                 
-                # Calculate gross income needed to net the after-tax income
-                gross_income_needed = self.calculate_gross_income(yearly_income_needed)
-                personal_tax = gross_income_needed - yearly_income_needed
-                
-                # Generate random return for the year
+                # Calculate investment returns
                 annual_return = np.random.uniform(min_return, max_return)
                 
-                # Calculate TFSA returns (tax-free)
+                # TFSA returns and contribution
                 tfsa_return = tfsa_savings * annual_return
-                tfsa_savings += tfsa_return  # Reinvest returns
-                tfsa_savings += annual_tfsa_contribution  # Add annual contribution
+                tfsa_savings += tfsa_return
+                tfsa_savings += annual_tfsa_contribution
                 
-                # Calculate taxable account returns
+                # Taxable account returns
                 taxable_return = taxable_savings * annual_return
-                taxable_savings += taxable_return  # Reinvest returns
+                taxable_savings += taxable_return
                 
-                # Calculate dividends and capital gains
+                # Calculate investment income
                 dividend_income = taxable_savings * dividend_yield
                 capital_gains = taxable_return - dividend_income
                 
-                # Adjust cost basis for capital gains
-                taxable_cost_basis += taxable_savings - taxable_cost_basis  # Reinvested amounts
+                # Update cost basis
+                taxable_cost_basis += taxable_return  # Reinvested returns
                 
-                # Taxes on dividends and capital gains
+                # Calculate taxes
+                gross_income_needed = self.calculate_gross_income(yearly_income_needed)
+                personal_tax = gross_income_needed - yearly_income_needed
+                
                 dividend_tax = self.calculate_tax(dividend_income, 'eligible_dividends')
                 capital_gains_tax = self.calculate_tax(capital_gains, 'capital_gains')
                 investment_tax = dividend_tax + capital_gains_tax
-                
-                # Total taxes paid this year
                 total_tax = personal_tax + investment_tax
                 total_tax_paid += total_tax
+
+                # Handle debt payments based on type
+                annual_interest = 0
+                principal_payment = 0
+                total_payment = 0
                 
-                # Calculate debt payment based on type
                 if debt_type == "Mortgage":
-                    # Calculate fixed monthly payment
-                    monthly_payment = self.calculate_mortgage_payment(
-                        initial_debt, interest_rate, amortization_years)
-                    annual_debt_payment = monthly_payment * 12
-                    # Split payment into principal and interest
-                    annual_interest = current_debt * interest_rate
-                    principal_payment = min(current_debt, annual_debt_payment - annual_interest)
+                    # Process monthly mortgage payments
+                    annual_mortgage_payment = monthly_mortgage_payment * 12
+                    remaining_debt = current_debt
+                    
+                    for month in range(12):
+                        if remaining_debt <= 0:
+                            break
+                            
+                        month_interest = remaining_debt * (interest_rate / 12)
+                        month_principal = min(remaining_debt, 
+                                           self.calculate_mortgage_principal_payment(
+                                               remaining_debt, monthly_mortgage_payment, interest_rate))
+                        
+                        annual_interest += month_interest
+                        principal_payment += month_principal
+                        remaining_debt -= month_principal
+                    
+                    current_debt = remaining_debt
+                    total_payment = annual_mortgage_payment
+                    
                 else:  # Line of Credit
                     annual_interest = current_debt * interest_rate
-                    principal_payment = 0  # Only interest is required
-
-                # Total expenses (personal income needs and debt payments)
-                total_expenses = gross_income_needed + annual_interest + principal_payment
+                    total_payment = annual_interest  # Only required to pay interest
                 
-                # Total available funds from investments
+                # Calculate total expenses and available funds
+                total_expenses = gross_income_needed + total_payment
                 total_available = tfsa_return + taxable_return
-                
-                # Remaining proceeds after expenses
                 remaining_proceeds = total_available - total_expenses - investment_tax
-                
-                # Handle surplus or shortfall
-                if remaining_proceeds >= 0:
-                    # Pay down additional principal with surplus
-                    if debt_type == "Line of Credit":
-                        debt_payment = min(current_debt, remaining_proceeds)
-                        current_debt -= debt_payment
-                        remaining_proceeds -= debt_payment
-                    else:  # Mortgage - principal already paid in fixed payment
-                        current_debt -= principal_payment
-                else:
-                    if debt_type == "Mortgage":
-                        current_debt -= principal_payment  # Still reduce by scheduled principal
+
+                # Handle surplus for Line of Credit
+                if remaining_proceeds > 0 and debt_type == "Line of Credit":
+                    additional_payment = min(current_debt, remaining_proceeds)
+                    current_debt -= additional_payment
+                    principal_payment = additional_payment
+                    remaining_proceeds -= additional_payment
 
                 # Record annual data
                 annual_data.append({
@@ -200,16 +246,19 @@ class BCDebtSimulation:
                     'Gross Income Needed': gross_income_needed,
                     'Personal Tax': personal_tax,
                     'Investment Tax': investment_tax,
-                    'Total Expenses': total_expenses
+                    'Total Expenses': total_expenses,
+                    'Principal Payment': principal_payment,
+                    'Interest Payment': annual_interest,
+                    'Total Payment': total_payment
                 })
                 
                 years += 1
 
-                # Break if investments are depleted before debt is paid
+                # Check if investments are depleted
                 if tfsa_savings <= 0 and taxable_savings <= 0:
-                    break  # Scenario fails
+                    break
 
-            # Append simulation results
+            # Store simulation results
             all_simulations.append({
                 'years': years,
                 'final_debt': current_debt,
@@ -222,53 +271,53 @@ class BCDebtSimulation:
         return all_simulations
 
 def analyze_simulations(simulations: List[Dict], scenario_name: str) -> None:
+    """Analyze and print simulation results"""
     successful_sims = [sim for sim in simulations if sim['final_debt'] <= 0]
-    failed_sims = len(simulations) - len(successful_sims)
     success_rate = len(successful_sims) / len(simulations) * 100
+
+    print(f"\n{scenario_name} Results:")
+    print(f"Success Rate: {success_rate:.2f}%")
 
     if successful_sims:
         years_to_repay = [sim['years'] for sim in successful_sims]
         avg_years = np.mean(years_to_repay)
         median_years = np.median(years_to_repay)
-        avg_final_wealth = np.mean([sim['tfsa_savings'] + sim['taxable_savings'] for sim in successful_sims])
+        avg_final_wealth = np.mean([sim['tfsa_savings'] + sim['taxable_savings'] 
+                                  for sim in successful_sims])
         avg_tax_paid = np.mean([sim['total_tax_paid'] for sim in successful_sims])
 
-        print(f"\n{scenario_name} Results:")
-        print(f"Success Rate: {success_rate:.2f}%")
         print(f"Average Years to Repay: {avg_years:.2f}")
         print(f"Median Years to Repay: {median_years:.2f}")
         print(f"Average Final Wealth: ${avg_final_wealth:,.2f}")
         print(f"Average Total Tax Paid: ${avg_tax_paid:,.2f}")
-    else:
-        print(f"\n{scenario_name} Results:")
-        print("No successful simulations.")
 
-    # Detailed breakdown for the first successful simulation
-    if successful_sims:
+        # Show detailed breakdown of first successful simulation
         print("\nDetailed Annual Breakdown for First Successful Simulation:")
         df = pd.DataFrame(successful_sims[0]['annual_data'])
         print(df.to_string(index=False))
+    else:
+        print("No successful simulations.")
 
-# Run simulations
-# simulator = BCDebtSimulation()
-
-# # Scenario parameters
-# params = {
-#     'initial_debt': 900000,
-#     'savings': 500000,
-#     'interest_rate': 0.055,
-#     'min_return': 0.1,
-#     'max_return': 0.3,
-#     'monthly_income_needed': 3000,
-#     'num_simulations': 10000
-# }
-
-# # Scenario 1: All money in TFSA
-# scenario1_results = simulator.run_simulation(tfsa_amount=500000, **params)
-
-# # Scenario 2: Only $300,000 in TFSA
-# scenario2_results = simulator.run_simulation(tfsa_amount=300000, **params)
-
-# # Analyze results
-# analyze_simulations(scenario1_results, "Scenario 1 (Full TFSA)")
-# analyze_simulations(scenario2_results, "Scenario 2 ($300,000 in TFSA)")
+# Example usage
+if __name__ == "__main__":
+    simulator = BCDebtSimulation()
+    
+    # Example parameters
+    params = {
+        'initial_debt': 900000,
+        'savings': 500000,
+        'tfsa_amount': 300000,
+        'interest_rate': 0.055,
+        'min_return': 0.1,
+        'max_return': 0.3,
+        'monthly_income_needed': 0,
+        'num_simulations': 1000,
+        'debt_type': "Mortgage",
+        'amortization_years': 5
+    }
+    
+    # Run simulation
+    results = simulator.run_simulation(**params)
+    
+    # Analyze results
+    analyze_simulations(results, "Mortgage Simulation")

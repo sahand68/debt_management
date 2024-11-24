@@ -299,6 +299,72 @@ class BCDebtSimulation:
 
         return all_simulations
 
+    def run_tfsa_simulation(self,
+                            tfsa_savings: float,
+                            min_return: float,
+                            max_return: float,
+                            num_simulations: int = 1000,
+                            max_years: int = 30,
+                            inflation_rate: float = 0.02,
+                            dividend_yield: float = 0.02,
+                            annual_tfsa_contribution: float = 6500.0) -> List[Dict]:
+        """
+        Run TFSA growth simulations with investment returns
+
+        Parameters:
+        tfsa_savings (float): Initial TFSA savings
+        min_return (float): Minimum annual investment return
+        max_return (float): Maximum annual investment return
+        num_simulations (int): Number of simulation runs
+        max_years (int): Maximum simulation years
+        inflation_rate (float): Annual inflation rate
+        dividend_yield (float): Annual dividend yield
+        annual_tfsa_contribution (float): Yearly TFSA contribution
+
+        Returns:
+        List[Dict]: Results of all simulations
+        """
+
+        all_simulations = []
+
+        for sim in range(num_simulations):
+            # Initialize simulation variables
+            tfsa_balance = tfsa_savings
+            years = 0
+            annual_data = []
+
+            while years < max_years:
+                # Adjust for inflation (if applicable)
+                # Not adjusting contributions for inflation in this example
+
+                # Calculate investment returns
+                annual_return = np.random.uniform(min_return, max_return)
+
+                # TFSA returns and contribution
+                tfsa_earnings = tfsa_balance * annual_return
+                tfsa_balance += tfsa_earnings
+                tfsa_balance += annual_tfsa_contribution
+
+                # Record annual data
+                annual_data.append({
+                    'Year': years + 1,
+                    'TFSA Balance': tfsa_balance,
+                    'Annual Return': annual_return,
+                    'TFSA Earnings': tfsa_earnings,
+                    'Annual Contribution': annual_tfsa_contribution,
+                })
+
+                years += 1
+
+            # Store simulation results
+            all_simulations.append({
+                'years': years,
+                'tfsa_balance': tfsa_balance,
+                'annual_data': annual_data
+            })
+
+        return all_simulations
+
 def analyze_simulations(simulations: List[Dict], scenario_name: str) -> None:
     """Analyze and print simulation results"""
     successful_sims = [sim for sim in simulations if sim['final_debt'] <= 0]

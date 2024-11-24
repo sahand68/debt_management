@@ -159,6 +159,9 @@ class BCDebtSimulation:
                 monthly_mortgage_payment = self.calculate_mortgage_payment(
                     initial_debt, interest_rate, amortization_years)
 
+            # If all savings are in TFSA, set total_tax_paid to 0
+            total_tax_paid = 0 if taxable_savings == 0 else total_tax_paid
+
             while current_debt > 0 and years < max_years:
                 # Adjust for inflation
                 if years > 0:
@@ -176,32 +179,36 @@ class BCDebtSimulation:
                 taxable_return = taxable_savings * annual_return
                 taxable_savings += taxable_return
                 
-                # Calculate investment income
-                dividend_income = taxable_savings * dividend_yield
-                capital_gains = taxable_return - dividend_income
+                # Calculate investment income (only from taxable accounts)
+                dividend_income = taxable_savings * dividend_yield  # Only taxable account dividends
+                capital_gains = taxable_return - dividend_income    # Only taxable account gains
                 
                 # Update cost basis
                 taxable_cost_basis += taxable_return  # Reinvested returns
                 
-                # Calculate taxes
+                # Calculate gross income needed regardless of taxable savings
                 gross_income_needed = self.calculate_gross_income(yearly_income_needed)
-                personal_tax = gross_income_needed - yearly_income_needed
                 
-                dividend_tax = self.calculate_tax(dividend_income, 'eligible_dividends')
-                capital_gains_tax = self.calculate_tax(capital_gains, 'capital_gains')
-                investment_tax = dividend_tax + capital_gains_tax
-                total_tax = personal_tax + investment_tax
-                total_tax_paid += total_tax
+                # Calculate taxes only if there are taxable savings
+                if taxable_savings > 0:
+                    personal_tax = gross_income_needed - yearly_income_needed
+                    dividend_tax = self.calculate_tax(dividend_income, 'eligible_dividends')
+                    capital_gains_tax = self.calculate_tax(capital_gains, 'capital_gains')
+                    investment_tax = dividend_tax + capital_gains_tax
+                    total_tax = personal_tax + investment_tax
+                    total_tax_paid += total_tax
+                else:
+                    total_tax = 0
+                    investment_tax = 0
+                    personal_tax = 0
 
                 # Handle debt payments based on type
-                annual_interest = 0
-                principal_payment = 0
-                total_payment = 0
-                
                 if debt_type == "Mortgage":
                     # Process monthly mortgage payments
                     annual_mortgage_payment = monthly_mortgage_payment * 12
                     remaining_debt = current_debt
+                    annual_interest = 0  # Initialize variable
+                    principal_payment = 0  # Initialize variable
                     
                     for month in range(12):
                         if remaining_debt <= 0:
@@ -221,12 +228,35 @@ class BCDebtSimulation:
                     
                 else:  # Line of Credit
                     annual_interest = current_debt * interest_rate
-                    total_payment = annual_interest  # Only required to pay interest
-                
-                # Calculate total expenses and available funds
+                    principal_payment = 0
+                    
+                    # Calculate total investment returns
+                    total_investment_return = tfsa_return + taxable_return
+                    total_expenses_without_debt = gross_income_needed
+                    
+                    # Only pay interest if investment returns exceed total expenses
+                    if total_investment_return > (total_expenses_without_debt + annual_interest):
+                        total_payment = annual_interest
+                    else:
+                        # Skip interest payment and add it to the debt
+                        current_debt += annual_interest
+                        total_payment = 0
+
+                # Calculate total expenses and deduct from savings
                 total_expenses = gross_income_needed + total_payment
-                total_available = tfsa_return + taxable_return
-                remaining_proceeds = total_available - total_expenses - investment_tax
+                
+                # Deduct expenses from savings (prioritize TFSA earnings)
+                if tfsa_return >= total_expenses:
+                    tfsa_savings -= total_expenses
+                else:
+                    # Use all TFSA returns and remaining from taxable savings
+                    remaining_expenses = total_expenses - tfsa_return
+                    tfsa_savings -= tfsa_return
+                    taxable_savings = max(0, taxable_savings - remaining_expenses)
+
+                # Recalculate available funds after expense deduction
+                total_available = max(0, tfsa_return + taxable_return - total_expenses)
+                remaining_proceeds = total_available - investment_tax
 
                 # Handle surplus for Line of Credit
                 if remaining_proceeds > 0 and debt_type == "Line of Credit":
@@ -306,7 +336,7 @@ if __name__ == "__main__":
     params = {
         'initial_debt': 900000,
         'savings': 500000,
-        'tfsa_amount': 300000,
+        'tfsa_amount': 500000,
         'interest_rate': 0.055,
         'min_return': 0.1,
         'max_return': 0.3,

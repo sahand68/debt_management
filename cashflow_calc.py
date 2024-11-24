@@ -186,7 +186,7 @@ class BCDebtSimulation:
                 # Update cost basis
                 taxable_cost_basis += taxable_return  # Reinvested returns
                 
-                # Calculate gross income needed regardless of taxable savings
+                # Calculate gross income needed regardless of debt type
                 gross_income_needed = self.calculate_gross_income(yearly_income_needed)
                 
                 # Calculate taxes only if there are taxable savings
@@ -238,7 +238,6 @@ class BCDebtSimulation:
                     if total_investment_return > (total_expenses_without_debt + annual_interest):
                         total_payment = annual_interest
                     else:
-                        # Skip interest payment and add it to the debt
                         current_debt += annual_interest
                         total_payment = 0
 
